@@ -1,0 +1,4 @@
+ucimlrepo
+matplotlib
+pandas
+numpy
