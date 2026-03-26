@@ -41,14 +41,14 @@ w_max = X_clean['no_of_workers'].max()
 X_clean['workers_scaled'] = (X_clean['no_of_workers'] - w_min) / (w_max - w_min)
 
 # Splitting data (first shuffling to ensure randomness)
-df_final = pd.concat([X_clean, y_clean], axis=1).sample(frac=1, random_state=26)
+garment_data = pd.concat([X_clean, y_clean], axis=1).sample(frac=1, random_state=26)
 
-train_10 = df_final.sample(frac=0.1, random_state=42)
-train_30 = df_final.sample(frac=0.3, random_state=42)
-train_50 = df_final.sample(frac=0.5, random_state=42)
-train_100 = df_final # 100% of cleaned data
+train_10 = garment_data.sample(frac=0.1, random_state=42)
+train_30 = garment_data.sample(frac=0.3, random_state=42)
+train_50 = garment_data.sample(frac=0.5, random_state=42)
+train_100 = garment_data # 100% of cleaned data
 
-testing_dataset = df_final
+testing_dataset = garment_data
 
 print(f"10% size: {len(train_10)}")
 print(f"30% size: {len(train_30)}")
