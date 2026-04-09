@@ -22,10 +22,10 @@ data = pd.concat([X, y], axis=1)
 clean_data = data.iloc[:1500][["T_out", "Tdewpoint"]]
 
 z_scores = (clean_data - clean_data.mean()) / clean_data.std()
-clean_data = clean_data[(np.abs(z_scores) < 1.5).all(axis=1)]
+clean_data = clean_data[(np.abs(z_scores) < 3).all(axis=1)]
 
-X = clean_data[["Tdewpoint"]].values
-y = clean_data["T_out"].values
+X = clean_data[["T_out"]].values
+y = clean_data["Tdewpoint"].values
 
 
 # Split into train & test
@@ -55,45 +55,23 @@ class MLP(nn.Module):
 # Train MLP
 
 def train_mlp(X_train, y_train, X_test):
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    X_scaler = StandardScaler()
+    y_scaler = StandardScaler()
 
-    X_train = torch.tensor(X_train, dtype=torch.float32)
-    y_train = torch.tensor(y_train.reshape(-1,1), dtype=torch.float32)
-    X_test_scaled = torch.tensor(X_test_scaled, dtype=torch.float32)
+    X_train_scaled = X_scaler.fit_transform(X_train)
+    X_test_scaled = X_scaler.transform(X_test)
 
-    model = MLP()
-    loss_fn = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
-
-    for epoch in range(50):
-        model.train()
-        pred = model(X_train)
-        loss = loss_fn(pred, y_train)
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-    model.eval()
-    with torch.no_grad():
-        preds = model(X_test_scaled).numpy().flatten()
-
-    return preds
-
-def train_mlp_model(X_train, y_train):
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
+    y_train_scaled = y_scaler.fit_transform(y_train.reshape(-1,1))
 
     X_train_t = torch.tensor(X_train_scaled, dtype=torch.float32)
-    y_train_t = torch.tensor(y_train.reshape(-1,1), dtype=torch.float32)
+    y_train_t = torch.tensor(y_train_scaled, dtype=torch.float32)
+    X_test_t = torch.tensor(X_test_scaled, dtype=torch.float32)
 
     model = MLP()
     loss_fn = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(50):
+    for epoch in range(300):
         pred = model(X_train_t)
         loss = loss_fn(pred, y_train_t)
 
@@ -101,15 +79,44 @@ def train_mlp_model(X_train, y_train):
         loss.backward()
         optimizer.step()
 
-    return model, scaler
-
-def predict_mlp(model, scaler, X):
-    X_scaled = scaler.transform(X)
-    X_t = torch.tensor(X_scaled, dtype=torch.float32)
-
     model.eval()
     with torch.no_grad():
-        return model(X_t).numpy().flatten()
+        preds_scaled = model(X_test_t).numpy()
+        preds = y_scaler.inverse_transform(preds_scaled).flatten()
+
+    return preds
+
+def train_mlp_model(X_train, y_train):
+    X_scaler = StandardScaler()
+    y_scaler = StandardScaler()
+
+    X_train_scaled = X_scaler.fit_transform(X_train)
+    y_train_scaled = y_scaler.fit_transform(y_train.reshape(-1,1))
+
+    X_train_t = torch.tensor(X_train_scaled, dtype=torch.float32)
+    y_train_t = torch.tensor(y_train_scaled, dtype=torch.float32)
+
+    model = MLP()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    loss_fn = nn.MSELoss()
+
+    for epoch in range(300):
+        pred = model(X_train_t)
+        loss = loss_fn(pred, y_train_t)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    return model, X_scaler, y_scaler
+
+def predict_mlp(model, X_scaler, y_scaler, X):
+    X_scaled = X_scaler.transform(X)
+    X_t = torch.tensor(X_scaled, dtype=torch.float32)
+
+    with torch.no_grad():
+        y_scaled = model(X_t).numpy()
+        return y_scaler.inverse_transform(y_scaled).flatten()
 
 
 # Linear Regression
@@ -210,10 +217,10 @@ for frac in [0.1, 0.3, 0.5, 1.0]:
     y_train = y_train_full[idx]
 
     # train model properly
-    model, scaler = train_mlp_model(X_train, y_train)
+    model, x_scaler, y_scaler = train_mlp_model(X_train, y_train)
 
     # generate smooth curve
-    y_curve = predict_mlp(model, scaler, x_plot)
+    y_curve = predict_mlp(model, x_scaler, y_scaler, x_plot)
 
     plt.plot(x_plot, y_curve, label=f"{int(frac*100)}%")
 
