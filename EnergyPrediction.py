@@ -7,11 +7,11 @@ import torch.nn as nn
 import torch.optim as optim
 
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
 
 
-# Load & Clean Data
+# Load & Clean Data: COMPLETE!!
 
 appliances_energy_prediction = fetch_ucirepo(id=374) 
 
@@ -28,7 +28,7 @@ X = clean_data[["T_out"]].values
 y = clean_data["Tdewpoint"].values
 
 
-# Split into train & test
+# Split into train & test: COMPLETE!! Note: Testing 20%, Training 80%
 
 X_train_full, X_test, y_train_full, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
@@ -52,41 +52,7 @@ class MLP(nn.Module):
         return self.net(x)
 
 
-# Train MLP
-
-def train_mlp(X_train, y_train, X_test):
-    X_scaler = StandardScaler()
-    y_scaler = StandardScaler()
-
-    X_train_scaled = X_scaler.fit_transform(X_train)
-    X_test_scaled = X_scaler.transform(X_test)
-
-    y_train_scaled = y_scaler.fit_transform(y_train.reshape(-1,1))
-
-    X_train_t = torch.tensor(X_train_scaled, dtype=torch.float32)
-    y_train_t = torch.tensor(y_train_scaled, dtype=torch.float32)
-    X_test_t = torch.tensor(X_test_scaled, dtype=torch.float32)
-
-    model = MLP()
-    loss_fn = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    for epoch in range(300):
-        pred = model(X_train_t)
-        loss = loss_fn(pred, y_train_t)
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-    model.eval()
-    with torch.no_grad():
-        preds_scaled = model(X_test_t).numpy()
-        preds = y_scaler.inverse_transform(preds_scaled).flatten()
-
-    return preds
-
-def train_mlp_model(X_train, y_train):
+def train_mlp(X_train, y_train, epochs=300):
     X_scaler = StandardScaler()
     y_scaler = StandardScaler()
 
@@ -100,7 +66,7 @@ def train_mlp_model(X_train, y_train):
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     loss_fn = nn.MSELoss()
 
-    for epoch in range(300):
+    for _ in range(epochs):
         pred = model(X_train_t)
         loss = loss_fn(pred, y_train_t)
 
@@ -114,28 +80,31 @@ def predict_mlp(model, X_scaler, y_scaler, X):
     X_scaled = X_scaler.transform(X)
     X_t = torch.tensor(X_scaled, dtype=torch.float32)
 
+    model.eval()
     with torch.no_grad():
         y_scaled = model(X_t).numpy()
-        return y_scaler.inverse_transform(y_scaled).flatten()
 
+    return y_scaler.inverse_transform(y_scaled).flatten()
 
-# Linear Regression
-
-def linear_regression_predict(X_train, y_train, X_test):
+def train_linear(X_train, y_train):
     slope, intercept = np.polyfit(X_train.flatten(), y_train, 1)
-    return slope * X_test.flatten() + intercept
+    return slope, intercept
 
+def predict_linear(slope, intercept, X):
+    return slope * X.flatten() + intercept
 
-# Experiment for each fraction of dataset
-
-fractions = [0.1, 0.3, 0.5, 1.0]
+def evaluate(y_true, y_pred):
+    mse = mean_squared_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
+    return mse, r2
 
 def run_experiment():
     results = {}
+    fractions = [0.1, 0.3, 0.5, 1.0]
 
     for frac in fractions:
-        lin_errors = []
-        ann_errors = []
+        lin_train_err, lin_test_err = [], []
+        ann_train_err, ann_test_err = [], []
 
         for _ in range(3):
             idx = np.random.choice(len(X_train_full),
@@ -145,87 +114,89 @@ def run_experiment():
             X_train = X_train_full[idx]
             y_train = y_train_full[idx]
 
-            # Linear Regression
-            y_pred_lin = linear_regression_predict(X_train, y_train, X_test)
-            lin_mse = mean_squared_error(y_test, y_pred_lin)
-            lin_errors.append(lin_mse)
+            # Lin Reg
+            slope, intercept = train_linear(X_train, y_train)
 
-            # PyTorch ANN
-            y_pred_ann = train_mlp(X_train, y_train, X_test)
-            ann_mse = mean_squared_error(y_test, y_pred_ann)
-            ann_errors.append(ann_mse)
+            y_train_pred = predict_linear(slope, intercept, X_train)
+            y_test_pred  = predict_linear(slope, intercept, X_test)
+
+            lin_train_err.append(mean_squared_error(y_train, y_train_pred))
+            lin_test_err.append(mean_squared_error(y_test, y_test_pred))
+
+            # ANN
+            model, x_scaler, y_scaler = train_mlp(X_train, y_train)
+
+            y_train_pred = predict_mlp(model, x_scaler, y_scaler, X_train)
+            y_test_pred  = predict_mlp(model, x_scaler, y_scaler, X_test)
+
+            ann_train_err.append(mean_squared_error(y_train, y_train_pred))
+            ann_test_err.append(mean_squared_error(y_test, y_test_pred))
 
         results[frac] = {
-            "Linear Regression": (np.mean(lin_errors), np.std(lin_errors)),
-            "PyTorch MLP": (np.mean(ann_errors), np.std(ann_errors))
+            "Linear": {
+                "train": np.mean(lin_train_err),
+                "test": np.mean(lin_test_err)
+            },
+            "ANN": {
+                "train": np.mean(ann_train_err),
+                "test": np.mean(ann_test_err)
+            }
         }
+
     return results
-
-
-# Run Experiment and Print Results
 
 results = run_experiment()
 
 for frac, res in results.items():
     print(f"\nTraining Size: {int(frac*100)}%")
-    for model, (mean, std) in res.items():
-        print(f"{model}: {mean:.4f} ± {std:.4f}")
 
-# Graph results for Lin Reg
+    for model in ["Linear", "ANN"]:
+        train_err = res[model]["train"]
+        test_err = res[model]["test"]
+        gap = test_err - train_err
 
-x_plot = np.linspace(X.min(), X.max(), 200).reshape(-1, 1)
+        print(f"{model}:")
+        print(f"  Train MSE: {train_err:.4f}")
+        print(f"  Test  MSE: {test_err:.4f}")
+        print(f"  Gap       : {gap:.4f}")
+
+fractions = [0.1, 0.3, 0.5, 1.0]
+
+lin_train = [results[f]["Linear"]["train"] for f in fractions]
+ann_train = [results[f]["ANN"]["train"] for f in fractions]
 
 plt.figure()
+plt.plot(fractions, lin_train, marker='o', label="Linear")
+plt.plot(fractions, ann_train, marker='o', label="ANN")
 
-# plot ALL data points
-plt.scatter(X, y, alpha=0.3)
-
-for frac in [0.1, 0.3, 0.5, 1.0]:
-    idx = np.random.choice(len(X_train_full),
-                           int(len(X_train_full)*frac),
-                           replace=False)
-
-    X_train = X_train_full[idx]
-    y_train = y_train_full[idx]
-
-    slope, intercept = np.polyfit(X_train.flatten(), y_train, 1)
-
-    y_line = slope * x_plot.flatten() + intercept
-
-    plt.plot(x_plot, y_line, label=f"{int(frac*100)}%")
-
-plt.xlabel("Temperature Outside")
-plt.ylabel("Dewpoint")
-plt.title("Linear Regression (Different Training Sizes)")
+plt.xlabel("Training Data Fraction")
+plt.ylabel("Training MSE")
+plt.title("Training Error vs Data Size")
 plt.legend()
 plt.show()
 
-# Plot results for ANN
+lin_test = [results[f]["Linear"]["test"] for f in fractions]
+ann_test = [results[f]["ANN"]["test"] for f in fractions]
 
-# plot ALL data points
 plt.figure()
+plt.plot(fractions, lin_test, marker='o', label="Linear")
+plt.plot(fractions, ann_test, marker='o', label="ANN")
 
-# plot ALL data points
-plt.scatter(X, y, alpha=0.3)
+plt.xlabel("Training Data Fraction")
+plt.ylabel("Test MSE")
+plt.title("Test Error vs Data Size")
+plt.legend()
+plt.show()
 
-for frac in [0.1, 0.3, 0.5, 1.0]:
-    idx = np.random.choice(len(X_train_full),
-                           int(len(X_train_full)*frac),
-                           replace=False)
+lin_gap = [results[f]["Linear"]["test"] - results[f]["Linear"]["train"] for f in fractions]
+ann_gap = [results[f]["ANN"]["test"] - results[f]["ANN"]["train"] for f in fractions]
 
-    X_train = X_train_full[idx]
-    y_train = y_train_full[idx]
+plt.figure()
+plt.plot(fractions, lin_gap, marker='o', label="Linear")
+plt.plot(fractions, ann_gap, marker='o', label="ANN")
 
-    # train model properly
-    model, x_scaler, y_scaler = train_mlp_model(X_train, y_train)
-
-    # generate smooth curve
-    y_curve = predict_mlp(model, x_scaler, y_scaler, x_plot)
-
-    plt.plot(x_plot, y_curve, label=f"{int(frac*100)}%")
-
-plt.xlabel("Temperature Outside")
-plt.ylabel("Dewpoint")
-plt.title("ANN (MLP) (Different Training Sizes)")
+plt.xlabel("Training Data Fraction")
+plt.ylabel("Generalization Gap")
+plt.title("Overfitting vs Data Size")
 plt.legend()
 plt.show()

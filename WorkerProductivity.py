@@ -11,21 +11,22 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
 
 
-# Load Data
-wine_quality = fetch_ucirepo(id=186)
-
-X = wine_quality.data.features 
-y = wine_quality.data.targets 
+# fetch dataset 
+productivity_prediction_of_garment_employees = fetch_ucirepo(id=597) 
+# data (as pandas dataframes) 
+X = productivity_prediction_of_garment_employees.data.features 
+y = productivity_prediction_of_garment_employees.data.targets 
 
 data = pd.concat([X, y], axis=1)
 
-clean_data = data.iloc[:1500][["free_sulfur_dioxide", "total_sulfur_dioxide"]]
+clean_data = data.iloc[:1500][["no_of_workers", "actual_productivity"]]
 
 z_scores = (clean_data - clean_data.mean()) / clean_data.std()
 clean_data = clean_data[(np.abs(z_scores) < 1.5).all(axis=1)]
 
-X = clean_data[["free_sulfur_dioxide"]].values
-y = clean_data["total_sulfur_dioxide"].values
+X = clean_data[["no_of_workers"]].values
+y = clean_data["actual_productivity"].values
+
 
 
 # Split into train & test: COMPLETE!! Note: Testing 20%, Training 80%
