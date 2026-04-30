@@ -12,15 +12,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
 
+# Load Data
+wine_quality = fetch_ucirepo(id=186)
 
-# fetch dataset 
-appliances_energy_prediction = fetch_ucirepo(id=374) 
-  
-# target (y) = # appliances (int)
-X = appliances_energy_prediction.data.features 
-y = appliances_energy_prediction.data.targets 
+X = wine_quality.data.features 
+y = wine_quality.data.targets 
 
-X = X.drop(columns=['date', 'rv1', 'rv2'])
+
 
 X.dropna(inplace=True)
 

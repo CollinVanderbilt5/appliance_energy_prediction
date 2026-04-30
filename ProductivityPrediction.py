@@ -14,15 +14,23 @@ from sklearn.preprocessing import StandardScaler
 
 
 # fetch dataset 
-appliances_energy_prediction = fetch_ucirepo(id=374) 
-  
-# target (y) = # appliances (int)
-X = appliances_energy_prediction.data.features 
-y = appliances_energy_prediction.data.targets 
+productivity_prediction_of_garment_employees = fetch_ucirepo(id=597) 
+# data (as pandas dataframes) 
+X = productivity_prediction_of_garment_employees.data.features 
+y = productivity_prediction_of_garment_employees.data.targets 
 
-X = X.drop(columns=['date', 'rv1', 'rv2'])
+X = X.drop(columns=['date', 'quarter', 'department', 'day'])
 
-X.dropna(inplace=True)
+#X.dropna(inplace=True)
+
+data = X.copy()
+data['actual_productivity'] = y
+
+data = data.dropna()
+
+X = data.drop(columns=['actual_productivity'])
+y = data['actual_productivity']
+
 
 X_train_full, X_test, y_train_full, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
@@ -94,11 +102,14 @@ def run_mlp_trial(size):
     X_train = X_train_full.sample(frac=size, random_state=42)
     y_train = y_train_full.loc[X_train.index]
 
+    y_train_2d = y_train.values.reshape(-1, 1)
+    y_test_2d = y_test.values.reshape(-1, 1)
+
+    y_train_scaled = y_scaler.fit_transform(y_train_2d)
+    y_test_scaled = y_scaler.transform(y_test_2d)
+
     X_train = X_scaler.fit_transform(X_train)
     X_test_scaled = X_scaler.transform(X_test)
-
-    y_train_scaled = y_scaler.fit_transform(y_train.values)
-    y_test_scaled = y_scaler.transform(y_test.values)
 
     X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
     y_train_tensor = torch.tensor(y_train_scaled, dtype=torch.float32)
