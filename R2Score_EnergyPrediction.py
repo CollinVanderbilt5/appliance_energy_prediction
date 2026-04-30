@@ -124,7 +124,7 @@ def run_mlp_trial(size):
         train_pred_scaled = model(X_train_tensor).numpy()
         test_pred_scaled = model(X_test_tensor).numpy()
 
-    # 🔑 unscale predictions
+    
     train_pred = y_scaler.inverse_transform(train_pred_scaled)
     test_pred = y_scaler.inverse_transform(test_pred_scaled)
 
