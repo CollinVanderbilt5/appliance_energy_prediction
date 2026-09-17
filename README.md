@@ -1,6 +1,6 @@
 # Appliance Energy Usage Prediction & Benchmarking Pipeline
 
-by Colin Vanderbilt, Dorian Williams-Webster, Haley Hankins, Will Dorsey
+by Collin Vanderbilt, Dorian Williams-Webster, Haley Hankins, Will Dorsey
 
 ## Overview
 This repository contains a end-to-end machine learning pipeline built in Python to predict household energy consumption using sensor data from the UCI Machine Learning Repository. 
